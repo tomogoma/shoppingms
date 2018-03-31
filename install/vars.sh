@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+NAME="shoppingms"
+VERSION="0.1.0"
+DESCRIPTION="Shopping list management service"
+CANONICAL_NAME="shoppingmsv0"
+CONF_DIR="/etc/shoppingms"
+CONF_FILE="/etc/shoppingms/shoppingmsv0.conf.yml"
+INSTALL_DIR="/usr/local/bin"
+INSTALL_FILE="/usr/local/bin/shoppingmsv0"
+UNIT_NAME="shoppingmsv0.service"
+UNIT_FILE="/etc/systemd/system/shoppingmsv0.service"
+DOCS_DIR="/etc/shoppingms/docs"
