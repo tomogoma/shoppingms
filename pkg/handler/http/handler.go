@@ -58,6 +58,13 @@ func (s handler) handleRoute(r *mux.Router) {
 	s.handleStatus(r)
 	s.handleDocs(r)
 	s.handleNotFound(r)
+	s.handleNewShoppingList(r)
+	s.handleUpdateShoppingList(r)
+	s.handleGetShoppingLists(r)
+	s.handleUpsertShoppingListItem(r)
+	s.handleDeleteShoppingListItem(r)
+	s.handleGetShoppingListItems(r)
+	s.handleSearchShoppingItems(r)
 }
 
 /**
@@ -106,6 +113,247 @@ func (s *handler) handleStatus(r *mux.Router) {
 func (s *handler) handleDocs(r *mux.Router) {
 	r.PathPrefix("/" + config.DocsPath).
 		Handler(http.FileServer(http.Dir(config.DefaultDocsDir())))
+}
+
+/**
+ * @api {put} /shoppinglists New Shopping List
+ * @apiName InsertShoppingList
+ * @apiVersion 0.1.0
+ * @apiGroup Service
+ * @apiDescription insert a shopping list by name if not exists
+ *
+ * @apiHeader x-api-key the api key
+ * @apiHeader Authorization Bearer token received from authentication
+ * 		micro-service in the form "Bearer {token-value}".
+ *
+ * @apiParam (JSON Request Body) {String} name The name of the new shopping list.
+ *
+ * @apiUse ShoppingList200
+ * @apiUse ShoppingList201
+ *
+ */
+func (s *handler) handleNewShoppingList(r *mux.Router) {
+	r.Methods(http.MethodPut).
+		PathPrefix("/shoppinglists").
+		HandlerFunc(
+		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
+			// TODO()
+			handleError(w, r, r, errors.NewNotImplemented(), s)
+		}),
+	)
+}
+
+/**
+ * @api {put} /shoppinglists/{ID} Update Shopping List
+ * @apiName UpdateShoppingList
+ * @apiVersion 0.1.0
+ * @apiGroup Service
+ * @apiDescription update a shopping list with {ID}.
+ *
+ * @apiHeader x-api-key the api key
+ * @apiHeader Authorization Bearer token received from authentication
+ * 		micro-service in the form "Bearer {token-value}".
+ *
+ * @apiParam (URL Path Params) {String} id The ID of the shopping list.
+ *
+ * @apiParam (JSON Request Body) {String} name
+ * 		Unique name of the shopping list.
+ * @apiParam (JSON Request Body) {String="PREPARATION","SHOPPING"} mode
+ * 		The current mode of the shopping list on the client apps.
+ *
+ * @apiUse ShoppingList200
+ *
+ */
+func (s *handler) handleUpdateShoppingList(r *mux.Router) {
+	r.Methods(http.MethodPut).
+		PathPrefix("/shoppinglists/{ID}").
+		HandlerFunc(
+		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
+			// TODO()
+			handleError(w, r, r, errors.NewNotImplemented(), s)
+		}),
+	)
+}
+
+/**
+ * @api {get} /shoppinglists Get Shopping Lists
+ * @apiName GetShoppingLists
+ * @apiVersion 0.1.0
+ * @apiGroup Service
+ * @apiDescription Get shopping lists for a user.
+ *
+ * @apiHeader x-api-key the api key
+ * @apiHeader Authorization Bearer token received from authentication
+ * 		micro-service in the form "Bearer {token-value}".
+ *
+ * @apiParam (URL Query Params) {Long} [offset=0]
+ * 		Offset index to fetch from.
+ * @apiParam (URL Query Params) {Long} [count=10]
+ * 		Number of shopping lists to fetch.
+ *
+ * @apiUse ShoppingLists200
+ *
+ */
+func (s *handler) handleGetShoppingLists(r *mux.Router) {
+	r.Methods(http.MethodGet).
+		PathPrefix("/shoppinglists").
+		HandlerFunc(
+		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
+			// TODO()
+			handleError(w, r, r, errors.NewNotImplemented(), s)
+		}),
+	)
+}
+
+/**
+ * @api {put} /shoppinglists/{ID}/items Upsert Shopping List Item
+ * @apiName UpsertShoppingListItem
+ * @apiVersion 0.1.0
+ * @apiGroup Service
+ * @apiDescription Update/Insert a list item's values for a shopping list.
+ *		Note that all details under the Price object are shared with
+ * 		other users and will not be deleted during item deletion.
+ *
+ * @apiHeader x-api-key the api key
+ * @apiHeader Authorization Bearer token received from authentication
+ * 		micro-service in the form "Bearer {token-value}".
+ *
+ * @apiParam (URL Path Params) {String} id The ID of the shopping list.
+ *
+ * @apiParam (JSON Request Body) {String} itemName
+ * 		Name of the ShoppingItem e.g. Toothpaste.
+ * @apiParam (JSON Request Body) {Boolean} [inList]
+ * 		True if item is in the shopping list, false otherwise.
+ * @apiParam (JSON Request Body) {Boolean} [inCart]
+ * 		True if item is in the shopping cart, false otherwise. Marking this as
+ * 		true automatically sets inList to true.
+ * @apiParam (JSON Request Body) {String} [brandName]
+ * 		Name of the Brand of the itemName e.g. Colgate.
+ * @apiParam (JSON Request Body) {Int} [quantity]
+ * 		Number of items in the shopping List.
+ * @apiParam (JSON Request Body) {String} [measurementUnit]
+ * 		The measurement Unit to use e.g. 250ml Tub, KG, 5Kg bag, etc.
+ * @apiParam (JSON Request Body) {Float} [unitPrice]
+ * 		Price of one unit of measurement e.g. 200 if a 250ml Tub costs that.
+ * @apiParam (JSON Request Body) {String} [currency=KES]
+ *		Active ISO 4217 code denoting currency of the unitPrice.
+ *
+ * @apiUse ShoppingListItem200
+ *
+ */
+func (s *handler) handleUpsertShoppingListItem(r *mux.Router) {
+	r.Methods(http.MethodPut).
+		PathPrefix("/shoppinglists/{ID}/items").
+		HandlerFunc(
+		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
+			// TODO()
+			handleError(w, r, r, errors.NewNotImplemented(), s)
+		}),
+	)
+}
+
+/**
+ * @api {delete} /items/{ID} Delete Shopping List Item
+ * @apiName DeleteShoppingListItem
+ * @apiVersion 0.1.0
+ * @apiGroup Service
+ * @apiDescription Delete a shopping list Item. Note that this only deletes
+ * 		the top level shopping list, the price details remain intact.
+ *
+ * @apiHeader x-api-key the api key
+ * @apiHeader Authorization Bearer token received from authentication
+ * 		micro-service in the form "Bearer {token-value}".
+ *
+ * @apiParam (URL Path Params) {String} id
+ * 		The ID of the shopping list item to delete.
+ *
+ * @apiSuccess (200) emptyBody check status code for success.
+ *
+ */
+func (s *handler) handleDeleteShoppingListItem(r *mux.Router) {
+	r.Methods(http.MethodDelete).
+		PathPrefix("/items/{ID}").
+		HandlerFunc(
+		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
+			// TODO()
+			handleError(w, r, r, errors.NewNotImplemented(), s)
+		}),
+	)
+}
+
+/**
+ * @api {get} /shoppinglists/{ID}/items Get Shopping List Items
+ * @apiName GetShoppingListItems
+ * @apiVersion 0.1.0
+ * @apiGroup Service
+ * @apiDescription Get shopping items for a shopping list.
+ *
+ * @apiHeader x-api-key the api key
+ * @apiHeader Authorization Bearer token received from authentication
+ * 		micro-service in the form "Bearer {token-value}".
+ *
+ * @apiParam (URL Query Params) {Long} [offset=0]
+ * 		Offset index to fetch from.
+ * @apiParam (URL Query Params) {Long} [count=10]
+ * 		Number of shopping lists to fetch.
+ *
+ * @apiSuccess (200 JSON Response Body) {Object[]} items
+ *		List of ShoppingListItems. See "200 JSON Response Body" of
+ *		<a href="#api-Service-UpsertShoppingListItem">Upsert Shopping List Item</a>
+ *		for details on what each item looks like.
+ *
+ */
+func (s *handler) handleGetShoppingListItems(r *mux.Router) {
+	r.Methods(http.MethodGet).
+		PathPrefix("/shoppinglists/{ID}/items").
+		HandlerFunc(
+		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
+			// TODO()
+			handleError(w, r, r, errors.NewNotImplemented(), s)
+		}),
+	)
+}
+
+/**
+ * @api {get} /items/search Search Shopping Items
+ * @apiName SearchShoppingItems
+ * @apiVersion 0.1.0
+ * @apiGroup Service
+ * @apiDescription Search Shopping Items not necessarily belonging to a
+ *		specific ShoppingList.
+ *
+ * @apiHeader x-api-key the api key
+ * @apiHeader Authorization Bearer token received from authentication
+ * 		micro-service in the form "Bearer {token-value}".
+ *
+ * @apiParam (URL Query Params) {Long} [offset=0]
+ * 		Offset index to fetch from.
+ * @apiParam (URL Query Params) {Long} [count=10]
+ * 		Number of shopping lists to fetch.
+ * @apiParam (URL Query Params) {String} [brandName]
+ * 		If provided, filter items where brandName contains provided text.
+ * @apiParam (URL Query Params) {String} [itemName]
+ * 		If provided, filter items where itemName contains provided text.
+ * @apiParam (URL Query Params) {String} [brandPrice]
+ * 		If provided, filter items where brandPrice contains provided text.
+ * @apiParam (URL Query Params) {String} [measuringUnit]
+ * 		If provided, filter items where measuringUnit contains provided text.
+ *
+ * @apiSuccess (200 JSON Response Body) {Object[]} items
+ *		List of ShoppingListItems. See "200 JSON Response Body" of
+ *		<a href="#api-Service-UpsertShoppingListItem">Upsert Shopping List Item</a>
+ *		for details on what each item looks like.
+ *
+ */
+func (s *handler) handleSearchShoppingItems(r *mux.Router) {
+	r.Methods(http.MethodGet).
+		PathPrefix("/items/search").
+		HandlerFunc(
+		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
+			// TODO()
+			handleError(w, r, r, errors.NewNotImplemented(), s)
+		}),
+	)
 }
 
 func (s handler) handleNotFound(r *mux.Router) {
