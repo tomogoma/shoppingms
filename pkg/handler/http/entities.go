@@ -1,5 +1,28 @@
 package http
 
+import (
+	"github.com/tomogoma/shoppingms/pkg/shopping"
+	"github.com/tomogoma/crdb"
+	"encoding/json"
+)
+
+type JSONStringUpdate struct {
+	crdb.StringUpdate
+}
+
+func (jsu *JSONStringUpdate) UnmarshalJSON(data []byte) error {
+	// If this method was called, the value was set in the JSON string.
+	if string(data) == "null" { // Ignore the null literal value.
+		return nil
+	}
+
+	jsu.Updating = true
+	if err := json.Unmarshal(data, &jsu.NewVal); err != nil {
+		return err
+	}
+	return nil
+}
+
 /**
  * @apiDefine ShoppingLists200
  * @apiSuccess (200 JSON Response Body) {Object[]} shoppingLists
@@ -32,21 +55,6 @@ package http
  * @apiSuccess (200 existed JSON Response Body) {String} lastUpdated
  * 		ISO8601 date denoting last time the list was updated.
  */
-/**
- * @apiDefine ShoppingList201
- * @apiSuccess (201 created JSON Response Body) {String} ID
- *		Unique ID of the shopping list.
- * @apiSuccess (201 created JSON Response Body) {String} userID
- *		ID of the user who owns the shopping list.
- * @apiSuccess (201 created JSON Response Body) {String} name
- *		Unique name of the shopping list.
- * @apiSuccess (201 created JSON Response Body) {String="PREPARATION","SHOPPING"} mode
- * 		The current mode of the shopping list on the client apps.
- * @apiSuccess (201 created JSON Response Body) {String} created
- *		ISO8601 date of shopping list creation.
- * @apiSuccess (201 created JSON Response Body) {String} lastUpdated
- * 		ISO8601 date denoting last time the list was updated.
- */
 type ShoppingList struct {
 	ID          string `json:"ID,omitempty"`
 	UserID      string `json:"userID,omitempty"`
@@ -54,6 +62,32 @@ type ShoppingList struct {
 	Mode        string `json:"mode,omitempty"`
 	Created     string `json:"created,omitempty"`
 	LastUpdated string `json:"lastUpdated,omitempty"`
+}
+
+func NewShoppingList(list *shopping.ShoppingList) *ShoppingList {
+	if list == nil {
+		return nil
+	}
+	return &ShoppingList{
+		ID:          list.ID,
+		UserID:      list.UserID,
+		Name:        list.Name,
+		Mode:        list.Mode,
+		Created:     list.Created,
+		LastUpdated: list.LastUpdated,
+	}
+}
+
+func NewShoppingLists(lists []shopping.ShoppingList) []ShoppingList {
+	if len(lists) == 0 {
+		return nil
+	}
+	var ress []ShoppingList
+	for _, list := range lists {
+		res := NewShoppingList(&list)
+		ress = append(ress, *res)
+	}
+	return ress
 }
 
 type MeasuringUnit struct {

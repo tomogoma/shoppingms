@@ -11,6 +11,11 @@ import (
 	"github.com/tomogoma/go-typed-errors"
 	"github.com/tomogoma/shoppingms/pkg/config"
 	"github.com/tomogoma/shoppingms/pkg/logging"
+	"strings"
+	"io/ioutil"
+	"github.com/tomogoma/shoppingms/pkg/shopping"
+	"github.com/tomogoma/crdb"
+	"strconv"
 )
 
 type contextKey string
@@ -19,11 +24,28 @@ type Guard interface {
 	APIKeyValid(key []byte) (string, error)
 }
 
+type ShoppingManager interface {
+	errors.ToHTTPResponser
+	InsertShoppingList(JWT, name, mode string) (*shopping.ShoppingList, error)
+	UpdateShoppingList(JWT, shoppingListID string, name, mode crdb.StringUpdate) (*shopping.ShoppingList, error)
+	ShoppingLists(JWT string, offset, count int64) ([]shopping.ShoppingList, error)
+	ShoppingListItems(JWT, shoppingListID string, offset, count int64) ([]shopping.ShoppingList, error)
+}
+
 type handler struct {
 	errors.ErrToHTTP
 
-	guard  Guard
-	logger logging.Logger
+	guard   Guard
+	logger  logging.Logger
+	manager ShoppingManager
+}
+
+type Config struct {
+	Guard          Guard
+	Logger         logging.Logger
+	BaseURL        string
+	AllowedOrigins []string
+	Manager        ShoppingManager
 }
 
 const (
@@ -32,23 +54,26 @@ const (
 	ctxKeyLog = contextKey("log")
 )
 
-func NewHandler(g Guard, l logging.Logger, baseURL string, allowedOrigins []string) (http.Handler, error) {
-	if g == nil {
+func NewHandler(conf Config) (http.Handler, error) {
+	if conf.Guard == nil {
 		return nil, errors.New("Guard was nil")
 	}
-	if l == nil {
+	if conf.Logger == nil {
 		return nil, errors.New("Logger was nil")
 	}
+	if conf.Manager == nil {
+		return nil, errors.New("ShoppingManager was nil")
+	}
 
-	r := mux.NewRouter().PathPrefix(baseURL).Subrouter()
-	handler{guard: g, logger: l}.handleRoute(r)
+	r := mux.NewRouter().PathPrefix(conf.BaseURL).Subrouter()
+	handler{guard: conf.Guard, logger: conf.Logger, manager: conf.Manager}.handleRoute(r)
 
 	corsOpts := []handlers.CORSOption{
 		handlers.AllowedHeaders([]string{
 			"X-Requested-With", "Accept", "Content-Type", "Content-Length",
 			"Accept-Encoding", "X-CSRF-Token", "Authorization", "X-api-key",
 		}),
-		handlers.AllowedOrigins(allowedOrigins),
+		handlers.AllowedOrigins(conf.AllowedOrigins),
 		handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"}),
 	}
 	return handlers.CORS(corsOpts...)(r), nil
@@ -57,14 +82,17 @@ func NewHandler(g Guard, l logging.Logger, baseURL string, allowedOrigins []stri
 func (s handler) handleRoute(r *mux.Router) {
 	s.handleStatus(r)
 	s.handleDocs(r)
-	s.handleNotFound(r)
+
 	s.handleNewShoppingList(r)
 	s.handleUpdateShoppingList(r)
 	s.handleGetShoppingLists(r)
+
 	s.handleUpsertShoppingListItem(r)
 	s.handleDeleteShoppingListItem(r)
 	s.handleGetShoppingListItems(r)
 	s.handleSearchShoppingItems(r)
+
+	s.handleNotFound(r)
 }
 
 /**
@@ -120,16 +148,17 @@ func (s *handler) handleDocs(r *mux.Router) {
  * @apiName InsertShoppingList
  * @apiVersion 0.1.0
  * @apiGroup Service
- * @apiDescription insert a shopping list by name if not exists
+ * @apiDescription insert a shopping list by name if not exists.
  *
  * @apiHeader x-api-key the api key
  * @apiHeader Authorization Bearer token received from authentication
  * 		micro-service in the form "Bearer {token-value}".
  *
  * @apiParam (JSON Request Body) {String} name The name of the new shopping list.
+ * @apiParam (JSON Request Body) {String="PREPARATION","SHOPPING"} [mode="PREPARATION"]
+ * 		The current mode of the shopping list on the client apps.
  *
  * @apiUse ShoppingList200
- * @apiUse ShoppingList201
  *
  */
 func (s *handler) handleNewShoppingList(r *mux.Router) {
@@ -137,8 +166,26 @@ func (s *handler) handleNewShoppingList(r *mux.Router) {
 		PathPrefix("/shoppinglists").
 		HandlerFunc(
 		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
-			// TODO()
-			handleError(w, r, r, errors.NewNotImplemented(), s)
+
+			req := struct {
+				JWT  string
+				Name string
+				Mode string
+			}{}
+
+			if err := readJSONBody(r, &req); err != nil {
+				handleError(w, r, req, err, s)
+				return
+			}
+
+			var err error
+			if req.JWT, err = readJWT(r); err != nil {
+				handleError(w, r, req, err, s)
+				return
+			}
+
+			sl, err := s.manager.InsertShoppingList(req.JWT, req.Name, req.Mode)
+			s.respondJsonOn(w, r, req, NewShoppingList(sl), http.StatusOK, err, s.manager)
 		}),
 	)
 }
@@ -169,8 +216,31 @@ func (s *handler) handleUpdateShoppingList(r *mux.Router) {
 		PathPrefix("/shoppinglists/{ID}").
 		HandlerFunc(
 		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
-			// TODO()
-			handleError(w, r, r, errors.NewNotImplemented(), s)
+
+			req := struct {
+				JWT            string
+				ShoppingListID string
+				Name           JSONStringUpdate
+				Mode           JSONStringUpdate
+			}{}
+
+			if err := readJSONBody(r, &req); err != nil {
+				handleError(w, r, req, err, s)
+				return
+			}
+
+			req.ShoppingListID = mux.Vars(r)["ID"]
+
+			var err error
+			if req.JWT, err = readJWT(r); err != nil {
+				handleError(w, r, req, err, s)
+				return
+			}
+
+			sl, err := s.manager.UpdateShoppingList(req.JWT, req.ShoppingListID,
+				req.Name.StringUpdate, req.Mode.StringUpdate)
+
+			s.respondJsonOn(w, r, req, NewShoppingList(sl), http.StatusOK, err, s.manager)
 		}),
 	)
 }
@@ -199,8 +269,31 @@ func (s *handler) handleGetShoppingLists(r *mux.Router) {
 		PathPrefix("/shoppinglists").
 		HandlerFunc(
 		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
-			// TODO()
-			handleError(w, r, r, errors.NewNotImplemented(), s)
+
+			req := struct {
+				JWT    string
+				Offset int64
+				Count  int64
+			}{}
+
+			var err error
+			if req.JWT, err = readJWT(r); err != nil {
+				handleError(w, r, req, err, s)
+				return
+			}
+
+			if req.Offset, err = readOffset(r); err != nil {
+				handleError(w, r, req, err, s)
+				return
+			}
+
+			if req.Count, err = readCount(r); err != nil {
+				handleError(w, r, req, err, s)
+				return
+			}
+
+			sls, err := s.manager.ShoppingLists(req.JWT, req.Offset, req.Count)
+			s.respondJsonOn(w, r, req, NewShoppingLists(sls), http.StatusOK, err, s.manager)
 		}),
 	)
 }
@@ -308,8 +401,34 @@ func (s *handler) handleGetShoppingListItems(r *mux.Router) {
 		PathPrefix("/shoppinglists/{ID}/items").
 		HandlerFunc(
 		s.apiGuardChain(func(w http.ResponseWriter, r *http.Request) {
-			// TODO()
-			handleError(w, r, r, errors.NewNotImplemented(), s)
+
+			req := struct {
+				JWT            string
+				ShoppingListID string
+				Offset         int64
+				Count          int64
+			}{}
+
+			req.ShoppingListID = mux.Vars(r)["ID"]
+
+			var err error
+			if req.JWT, err = readJWT(r); err != nil {
+				handleError(w, r, req, err, s)
+				return
+			}
+
+			if req.Offset, err = readOffset(r); err != nil {
+				handleError(w, r, req, err, s)
+				return
+			}
+
+			if req.Count, err = readCount(r); err != nil {
+				handleError(w, r, req, err, s)
+				return
+			}
+
+			sls, err := s.manager.ShoppingListItems(req.JWT, req.ShoppingListID, req.Offset, req.Count)
+			s.respondJsonOn(w, r, req, NewShoppingLists(sls), http.StatusOK, err, s.manager)
 		}),
 	)
 }
@@ -446,4 +565,52 @@ func handleError(w http.ResponseWriter, r *http.Request, reqData interface{}, er
 		Error(err)
 	http.Error(w, "Something wicked happened, please try again later",
 		http.StatusInternalServerError)
+}
+
+func readJSONBody(r *http.Request, into interface{}) error {
+	bodyB, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return errors.NewClientf("read request body: %v", err)
+	}
+	defer r.Body.Close()
+	if err = json.Unmarshal(bodyB, into); err != nil {
+		return errors.NewClientf("invalid json body: %v", err)
+	}
+	return nil
+}
+
+func readJWT(r *http.Request) (string, error) {
+	bearerPrfx := "bearer "
+	bearerPrfxLen := len(bearerPrfx)
+	for _, val := range r.Header["Authorization"] {
+		if !strings.Contains(strings.ToLower(val), bearerPrfx) {
+			continue
+		}
+		return val[bearerPrfxLen:], nil
+	}
+	return "", errors.NewUnauthorized("\"Authorization\" header with \"Bearer \" token not found")
+}
+
+func readOffset(r *http.Request) (int64, error) {
+	offsetStr := r.URL.Query().Get("offset")
+	if offsetStr == "" {
+		return 0, nil
+	}
+	offset, err := strconv.ParseInt(offsetStr, 10, 64)
+	if err != nil {
+		return -1, errors.NewClientf("invalid offset: %v", err)
+	}
+	return offset, nil
+}
+
+func readCount(r *http.Request) (int64, error) {
+	countStr := r.URL.Query().Get("count")
+	if countStr == "" {
+		return 10, nil
+	}
+	count, err := strconv.ParseInt(countStr, 10, 64)
+	if err != nil {
+		return -1, errors.NewClientf("invalid count: %v", err)
+	}
+	return count, nil
 }
